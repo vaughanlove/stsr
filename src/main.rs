@@ -1,38 +1,25 @@
-mod types;
-mod registries;
-use types::terminal::{PrimitiveType, Terminal, TerminalShape, GenericParam};
-use types::tree::{Node};
-
-
+use stsr::arena::Arena;
+use stsr::node::{Node, NodeType};
+use stsr::types::{DataType, Shape};
 fn main() {
-    // Create a vector terminal with float elements and GENNUM1 dimension
-    let vector_terminal = Terminal::Variable(
-        TerminalShape::Vector(
-            PrimitiveType::Float,
-            GenericParam::Name("GENNUM1".to_string())
-        )
-    );
-    
-    // Print it using debug formatting
-    println!("Vector terminal: {}", vector_terminal);
-    
-    // Create a matrix terminal
-    let matrix_terminal = Terminal::Variable(
-        TerminalShape::Matrix(
-            PrimitiveType::Float,
-            GenericParam::Name("GENNUM1".to_string()),
-            GenericParam::Name("GENNUM2".to_string())
-        )
-    );
-    
-    println!("Matrix terminal: {}", matrix_terminal);
-    
-    // Create a scalar constant
-    let scalar_constant: Terminal = Terminal::Constant(
-        TerminalShape::Scalar(PrimitiveType::Integer)
-    );
+    // Create a vector terminal with float elements and GENNUM1 dimension    
+    println!("Hello world!");
 
-    let node: Node = Node::Terminal(vector_terminal);
-    
-    println!("Node: {}", node);
+    let arena = Arena::init();
+
+    let nt = NodeType::Terminal(DataType::Integer, Shape::Scalar);
+
+    println!("{:}", &nt);
+
+    let node = Node {
+        idx: 0,
+        _type: nt,
+        value: Box::new(123),
+        left: 0,
+        right: 0,
+        parent: 0
+    };
+
+    println!("{:}", &node)
+
 }
