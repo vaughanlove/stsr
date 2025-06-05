@@ -43,25 +43,25 @@ impl fmt::Display for DataType {
     }
 }
 
-impl fmt::Display for Shape {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Shape::Scalar => {
-                write!(f, "SCALAR")
-            }
-        }
-    }
-}
+// impl fmt::Display for Shape {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Shape::Scalar => {
+//                 write!(f, "SCALAR")
+//             }
+//         }
+//     }
+// }
 
-impl fmt::Display for NodeType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            NodeType::NonTerminal(operation) => {
-                write!(f, "NonTerminal({})", operation)
-            },
-            NodeType::Terminal(data_type, shape) => {
-                write!(f, "Terminal({}, {})", data_type, shape)
-            }
-        }
-    }
-}
+// impl fmt::Display for NodeType {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             NodeType::NonTerminal(operation) => {
+//                 write!(f, "NonTerminal({})", operation)
+//             },
+//             NodeType::Terminal(data_type, shape) => {
+//                 write!(f, "Terminal({}, {})", data_type, shape)
+//             }
+//         }
+//     }
+// }

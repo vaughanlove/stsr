@@ -1,8 +1,10 @@
 use crate::ops::Operation;
 use crate::types::{DataType, Shape};
+use crate::registry::TypeRegistry;
+use crate::variable::VariableContext;
 use std::any::Any;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NodeType {
     // Heap-allocated NonTerminal
     // input type, input type, operation, output type
@@ -12,17 +14,18 @@ pub enum NodeType {
     Terminal(DataType, Shape),
 }
 
+#[derive(Debug)]
 pub struct Node {
     pub idx: usize,
-    pub name: String, // for generics that need to pull value from variable.rs HashMap.
+    pub variable_id: Option<String>, // for generics that need to pull value from variable.rs HashMap.
     pub _type: NodeType, // for GPSR
     pub value: Box<dyn Any>,
-    pub left: usize,
-    pub right: usize,
+    pub left: Option<usize>,
+    pub right: Option<usize>,
     pub parent: usize,
 }
 
-trait MatchesTerminal {
+pub trait MatchesTerminal {
     const DATA_TYPE: DataType;
     fn get_shape(&self) -> Shape; 
 }
@@ -71,16 +74,70 @@ impl MatchesTerminal for Vec<Vec<f64>> {
 
 
 impl Node {
-    pub fn get_value(&self) -> &dyn Any {
-        self.value.as_ref()
+    pub fn evaluate(&self, arena: &[Node]) -> Result<Box<dyn std::any::Any>, String> {
+        self.evaluate_with_context(arena, &VariableContext::new())
     }
+
+    pub fn evaluate_with_context(&self, arena: &[Node], context: &VariableContext) -> Result<Box<dyn std::any::Any>, String> {
+        match self._type {
+            NodeType::Terminal(data_type, shape) => {
+                // Check if this terminal is a variable
+                if let Some(variable_id) = &self.variable_id {
+                    // Look up the variable value in the context
+                    if let Some(var_value) = context.get_variable_value(variable_id) {
+                        // Verify type compatibility
+                        if let Some((var_data_type, var_shape)) = context.get_variable_type(variable_id) {
+                            if var_data_type == data_type && var_shape == shape {
+                                TypeRegistry::extract_terminal(var_value, data_type, shape)
+                            } else {
+                                Err(format!(
+                                    "Variable '{}' type mismatch: expected {:?} {:?}, found {:?} {:?}",
+                                    variable_id, data_type, shape, var_data_type, var_shape
+                                ))
+                            }
+                        } else {
+                            Err(format!("Variable '{}' type information not found", variable_id))
+                        }
+                    } else {
+                        Err(format!("Variable '{}' not found in context", variable_id))
+                    }
+                } else {
+                    // Regular terminal with fixed value
+                    TypeRegistry::extract_terminal(&self.value, data_type, shape)
+                }
+            }
+            NodeType::NonTerminal(operation) => {
+                let left_idx = self.left.ok_or("NonTerminal missing left child")?;
+                let right_idx = self.right.ok_or("NonTerminal missing right child")?;
+                
+                let left_node = arena.get(left_idx).ok_or("Invalid left child index")?;
+                let right_node = arena.get(right_idx).ok_or("Invalid right child index")?;
+                
+                let left_val = left_node.evaluate_with_context(arena, context)?;
+                let right_val = right_node.evaluate_with_context(arena, context)?;
+                
+                let left_type = self.extract_type_info(&left_node._type)?;
+                let right_type = self.extract_type_info(&right_node._type)?;
+                
+                TypeRegistry::execute_operation(operation, left_type, right_type, left_val, right_val)
+            }
+        }
+    }
+
+    fn extract_type_info(&self, node_type: &NodeType) -> Result<(DataType, Shape), String> {
+        match node_type {
+            NodeType::Terminal(data_type, shape) => Ok((*data_type, *shape)),
+            NodeType::NonTerminal(_) => Err("Cannot extract type info from NonTerminal".to_string()),
+        }
+    }
+       
     pub fn get_type(&self) -> NodeType {
         self._type
     }
-    pub fn get_left_child_idx(&self) -> usize {
+    pub fn get_left_child_idx(&self) -> Option<usize> {
         self.left
     }
-    pub fn get_right_child_idx(&self) -> usize {
+    pub fn get_right_child_idx(&self) -> Option<usize> {
         self.right
     }
     pub fn get_parent_idx(&self) -> usize {
@@ -89,7 +146,7 @@ impl Node {
 
    pub fn new_terminal<T: 'static + MatchesTerminal>(
         idx: usize,
-        name: String,
+        variable_id: Option<String>,
         value: T,
         left: usize,
         right: usize,
@@ -99,18 +156,18 @@ impl Node {
 
         Node {
             idx,
-            name,
+            variable_id,
             _type: NodeType::Terminal(T::DATA_TYPE, shape),
             value: Box::new(value),
-            left,
-            right,
+            left: Some(left),
+            right: Some(right),
             parent,
         }
     }
 
     pub fn new_non_terminal<T: 'static>(
         idx: usize,
-        name: String,
+        variable_id: Option<String>,
         operation: Operation,
         value: T,
         left: usize,
@@ -119,11 +176,11 @@ impl Node {
     ) -> Self {
         Node {
             idx,
-            name,
+            variable_id,
             _type: NodeType::NonTerminal(operation),
             value: Box::new(value),
-            left,
-            right,
+            left: Some(left),
+            right: Some(right),
             parent,
         }
     }

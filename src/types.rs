@@ -1,18 +1,14 @@
-use std::any::Any;
-use rand::Rng;
-
-
 /// Base Types in the system. 
 /// 
 /// TODO: The developer needs a way to specify a subset of these for their genetic program. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DataType {
     Integer,
     Float,
 }
 
 /// The shape that a terminal can take. 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Shape {
     Scalar,
     Vector(usize),
