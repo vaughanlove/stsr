@@ -41,7 +41,7 @@ impl MatchesTerminal for f64 {
 }
 
 impl MatchesTerminal for Vec<i64> {
-    const DATA_TYPE: DataType = DataType::Float;
+    const DATA_TYPE: DataType = DataType::Integer;
     fn get_shape(&self) -> Shape { Shape::Vector(self.len()) }
 }
 
@@ -51,7 +51,7 @@ impl MatchesTerminal for Vec<f64> {
 }
 
 impl MatchesTerminal for Vec<Vec<i64>> {
-    const DATA_TYPE: DataType = DataType::Float;
+    const DATA_TYPE: DataType = DataType::Integer;
     fn get_shape(&self) -> Shape { 
         if self.is_empty() {
             Shape::Matrix(0, 0)
@@ -64,7 +64,7 @@ impl MatchesTerminal for Vec<Vec<i64>> {
 impl MatchesTerminal for Vec<Vec<f64>> {
     const DATA_TYPE: DataType = DataType::Float;
     fn get_shape(&self) -> Shape { 
-        if self.is_empty() {
+         if self.is_empty() {
             Shape::Matrix(0, 0)
         } else {
             Shape::Matrix(self.len(), self[0].len())
@@ -141,7 +141,6 @@ impl Node {
         parent: usize,
     ) -> Self {
         let shape = value.get_shape();
-
         Node {
             idx,
             variable_id,

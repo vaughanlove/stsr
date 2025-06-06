@@ -1,4 +1,4 @@
-use crate::types::{DataType, Shape};
+use crate::types::{DataType::{self, *}, Shape::{self, *}};
 use crate::ops::Operation;
 use rand::Rng;
 use std::any::Any;
@@ -6,6 +6,13 @@ use std::any::Any;
 pub struct TypeRegistry;
 
 impl TypeRegistry {
+    pub fn get_compatible_shape_and_type(data_type: DataType, shape: Shape) -> Vec<(DataType, Shape)> {
+        match (data_type, shape) {
+            (Integer, Scalar) => vec![(Integer, Scalar), (Float, Scalar), (Integer, Vector(2)), (Integer, Vector(3)), (Float, Matrix(2, 2)), (Integer, Vector(2))],
+            _ => vec![]
+        }
+    }
+
     pub fn create_random_terminal(data_type: DataType, shape: Shape) -> Box<dyn Any> {
         let mut rng = rand::rng();
 
