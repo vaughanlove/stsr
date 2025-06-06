@@ -15,17 +15,10 @@ pub enum Shape {
     Matrix(usize, usize),
 }
 
-// type GenericFunction = dyn Fn(&DataType, &DataType) -> DataType;
-
-
-// trait Executable {
-//     // fn get_value(&self) -> Self;
-//     // fn get_type(&self) -> Self;
-// }
-
-
-
-
-
-
-
+// Struct that will be public facing for developers to define their own variables according to their datasets.
+#[derive(Debug, Clone)]
+pub struct Variable {
+    pub name: String,
+    pub data_type: DataType,
+    pub shape: Shape,
+}

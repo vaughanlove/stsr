@@ -2,50 +2,97 @@ use crate::types::{DataType, Shape};
 use crate::node::{Node, NodeType};
 use crate::ops::Operation;
 use crate::registry::TypeRegistry;
-use crate::variable::Variable;
+use crate::types::Variable;
 use rand::Rng;
 use std::collections::HashSet;
 
+
+
+/// In GPSR, there are two generation methods outlined.
+/// Grow - Terminals and Nonterminals can appear at any depth - randomly chosen during construction. Leaves are always Terminals.
+/// Full - The entire tree is filled up until max_depth - 1 with NonTerminals. The leaves are then all populated with Terminals. 
 #[derive(Clone, Copy, Debug)]
 pub enum GenerationMethod {
     Full,
     Grow,
 }
 
+/// Arena implementation for representing the Nodes in a tree structure.
+#[derive(Debug)]
 pub struct Arena {
     arena: Vec<Node>,
 }
 
 impl Arena {
+    /// Initialize an empty arena.
     pub fn init() -> Self {
         Arena {
             arena: Vec::new(),
         }
     }
 
+    /// Initialize an arena using the Full method or (eventually) the Grow method.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `max_depth` - The maximum size of the tree
+    /// * `target_type` - The root is the eventual output of the function created. 
+    ///   `target_type` is the DataType you want as output
+    /// * `target_shape` - The target shape of the function's output
+    /// * `required_variables` - The variables that you are providing in the input dataset
+    /// 
+    /// # Returns
+    /// 
+    /// Returns an `Arena` instance
     pub fn init_with_method(
         method: GenerationMethod,
         max_depth: usize,
         target_type: DataType,
         target_shape: Shape,
         required_variables: Vec<Variable>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let mut arena = Arena {
             arena: Vec::new(),
         };
 
-        // Generate a root node using the specified method that returns the target type
-        arena.generate_tree_with_variables(max_depth, &method, target_type, target_shape, required_variables, 0);
+        // Validate that tree can accommodate all required variables
+        let max_terminals = 2_usize.pow(max_depth as u32 - 1);
+        let compatible_var_count = required_variables
+            .iter()
+            .filter(|var| var.data_type == target_type && var.shape == target_shape)
+            .count();
+        
+        if compatible_var_count > max_terminals {
+            return Err(format!(
+                "Cannot fit {} compatible variables in tree with {} terminal slots",
+                compatible_var_count, max_terminals
+            ));
+        }
 
-        arena
+        // Generate a root node using the specified method that returns the target type
+        let remaining_vars = arena.generate_tree_with_variables(max_depth, &method, target_type, target_shape, required_variables.clone(), 0);
+
+        // Verify all required variables were placed
+        if !remaining_vars.is_empty() {
+            return Err(format!(
+                "Failed to place required variables: {:?}",
+                remaining_vars.iter().map(|v| &v.name).collect::<Vec<_>>()
+            ));
+        }
+
+        arena.validate_required_variables(&required_variables)?;
+
+        Ok(arena)
     }
 
+    /// Return all of the nodes in the arena
     pub fn get_nodes(&self) -> &[Node] {
         &self.arena
     }
 
+    /// Return a reference to the first node in the arena.
     pub fn get_root(&self) -> Option<&Node> {
-        self.arena.last()
+        self.arena.first()
     }
 
     fn generate_tree_with_variables(
@@ -56,88 +103,14 @@ impl Arena {
         required_shape: Shape,
         required_variables: Vec<Variable>,
         parent_idx: usize,
-    ) -> usize {
+    ) -> Vec<Variable> {
         match method {
             GenerationMethod::Full => {
-                self.generate_full_tree_with_variables(max_depth, required_type, required_shape, required_variables, parent_idx)
+                self.generate_full_tree_with_variables(max_depth, required_type, required_shape, required_variables, parent_idx).1
             }
             GenerationMethod::Grow => {
-                self.generate_grow_tree_with_variables(max_depth, required_type, required_shape, required_variables, parent_idx)
-            }
-        }
-    }
-
-    fn generate_tree(
-        &mut self,
-        max_depth: usize,
-        method: &GenerationMethod,
-        required_type: DataType,
-        required_shape: Shape,
-        parent_idx: usize,
-    ) -> usize {
-        self.generate_tree_with_variables(max_depth, method, required_type, required_shape, Vec::new(), parent_idx)
-    }
-
-    fn generate_full_tree(
-        &mut self,
-        max_depth: usize,
-        required_type: DataType,
-        required_shape: Shape,
-        parent_idx: usize,
-    ) -> usize {
-        if max_depth == 1 {
-            // At max depth, always generate a terminal of the required type
-            self.add_terminal(required_type, required_shape, parent_idx)
-        } else {
-            // For full method, always generate non-terminals until max depth
-            let node_idx = self.add_non_terminal(required_type, required_shape, parent_idx);
-
-            // Generate children - both operands must be the same type for our basic operations
-            let left_idx = self.generate_full_tree(max_depth - 1, required_type, required_shape, node_idx);
-            let right_idx = self.generate_full_tree(max_depth - 1, required_type, required_shape, node_idx);
-
-            // Set children indices
-            if let Some(node) = self.arena.get_mut(node_idx) {
-                node.left = Some(left_idx);
-                node.right = Some(right_idx);
-            }
-
-            node_idx
-        }
-    }
-
-    fn generate_grow_tree(
-        &mut self,
-        max_depth: usize,
-        required_type: DataType,
-        required_shape: Shape,
-        parent_idx: usize,
-    ) -> usize {
-        if max_depth == 1 {
-            // At max depth, always generate a terminal
-            self.add_terminal(required_type, required_shape, parent_idx)
-        } else {
-            // For grow method, randomly choose between terminal and non-terminal
-            let mut rng = rand::thread_rng();
-
-            if rng.gen_bool(0.5) {
-                // 50% chance for terminal
-                self.add_terminal(required_type, required_shape, parent_idx)
-            } else {
-                // Generate a non-terminal
-                let node_idx = self.add_non_terminal(required_type, required_shape, parent_idx);
-
-                // Generate children
-                let left_idx = self.generate_grow_tree(max_depth - 1, required_type, required_shape, node_idx);
-                let right_idx = self.generate_grow_tree(max_depth - 1, required_type, required_shape, node_idx);
-
-                // Set children indices
-                if let Some(node) = self.arena.get_mut(node_idx) {
-                    node.left = Some(left_idx);
-                    node.right = Some(right_idx);
-                }
-
-                node_idx
+                // self.generate_grow_tree_with_variables(max_depth, required_type, required_shape, required_variables, parent_idx)
+                unimplemented!()
             }
         }
     }
@@ -184,7 +157,7 @@ impl Arena {
         _required_shape: Shape,
         parent_idx: usize,
     ) -> usize {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let idx = self.arena.len();
 
         // Available operations - all return the same type as their operands
@@ -195,7 +168,7 @@ impl Arena {
             Operation::Divide,
         ];
 
-        let operation = operations[rng.gen_range(0..operations.len())];
+        let operation = operations[rng.random_range(0..operations.len())];
 
         // Non-terminals store a string representation for debugging
         let op_name = match operation {
@@ -226,35 +199,40 @@ impl Arena {
         required_shape: Shape,
         mut required_variables: Vec<Variable>,
         parent_idx: usize,
-    ) -> usize {
+    ) -> (usize, Vec<Variable>) {
         // Filter variables that match the current type requirements
         let compatible_vars: Vec<Variable> = required_variables
             .iter()
             .filter(|var| var.data_type == required_type && var.shape == required_shape)
-            .cloned()
-            .collect();
+            .cloned().collect();
 
         if max_depth == 1 {
             // At max depth, must generate a terminal
-            if !compatible_vars.is_empty() && rand::thread_rng().gen_bool(0.5) {
-                // 50% chance to use a required variable if available
+            if !compatible_vars.is_empty() {
+                // Prioritize using a required variable at terminal positions
                 let var = compatible_vars.into_iter().next().unwrap();
-                // Remove this variable from the required list
+                // Remove this variable from the required list since it's now placed
                 required_variables.retain(|v| v.name != var.name);
-                self.add_variable_terminal(var.data_type, var.shape, var.name, parent_idx)
+
+                let node_idx = self.add_variable_terminal(var.data_type, var.shape, var.name.clone(), parent_idx);
+                (node_idx, required_variables)
             } else {
-                // Generate regular terminal
-                self.add_terminal(required_type, required_shape, parent_idx)
+                // Generate regular terminal only if no compatible variables remain
+                let node_idx = self.add_terminal(required_type, required_shape, parent_idx);
+                (node_idx, required_variables)
             }
         } else {
             // Generate non-terminal and recurse
             let node_idx = self.add_non_terminal(required_type, required_shape, parent_idx);
 
-            // Distribute remaining required variables between children
-            let (left_vars, right_vars) = self.split_required_variables(required_variables);
+            // Strategic distribution: ensure variables get placed
+            let (left_vars, right_vars) = self.distribute_variables_strategically(required_variables, max_depth - 1, required_type, required_shape);
 
-            let left_idx = self.generate_full_tree_with_variables(max_depth - 1, required_type, required_shape, left_vars, node_idx);
-            let right_idx = self.generate_full_tree_with_variables(max_depth - 1, required_type, required_shape, right_vars, node_idx);
+            let (left_idx, mut remaining_vars) = self.generate_full_tree_with_variables(max_depth - 1, required_type, required_shape, left_vars, node_idx);
+            let (right_idx, right_remaining) = self.generate_full_tree_with_variables(max_depth - 1, required_type, required_shape, right_vars, node_idx);
+
+            // Combine remaining variables from both subtrees
+            remaining_vars.extend(right_remaining);
 
             // Set children indices
             if let Some(node) = self.arena.get_mut(node_idx) {
@@ -262,83 +240,44 @@ impl Arena {
                 node.right = Some(right_idx);
             }
 
-            node_idx
+            (node_idx, remaining_vars)
         }
     }
 
-    fn generate_grow_tree_with_variables(
-        &mut self,
-        max_depth: usize,
-        required_type: DataType,
-        required_shape: Shape,
-        mut required_variables: Vec<Variable>,
-        parent_idx: usize,
-    ) -> usize {
-        // Filter variables that match the current type requirements
-        let compatible_vars: Vec<Variable> = required_variables
+    fn distribute_variables_strategically(&self, mut variables: Vec<Variable>, _remaining_depth: usize, required_type: DataType, required_shape: Shape) -> (Vec<Variable>, Vec<Variable>) {
+        let mut left_vars = Vec::new();
+        let mut right_vars = Vec::new();
+
+        // Filter compatible variables for this subtree
+        let compatible_vars: Vec<Variable> = variables
             .iter()
             .filter(|var| var.data_type == required_type && var.shape == required_shape)
             .cloned()
             .collect();
 
-        if max_depth == 1 {
-            // At max depth, must generate a terminal
-            if !compatible_vars.is_empty() && rand::thread_rng().gen_bool(0.5) {
-                let var = compatible_vars.into_iter().next().unwrap();
-                required_variables.retain(|v| v.name != var.name);
-                self.add_variable_terminal(var.data_type, var.shape, var.name, parent_idx)
-            } else {
-                self.add_terminal(required_type, required_shape, parent_idx)
-            }
-        } else {
-            let mut rng = rand::thread_rng();
-
-            // If we have required variables and limited depth, bias toward non-terminals
-            let force_nonterminal = !required_variables.is_empty() && max_depth <= 3;
+        // Note: Each subtree in Full method has 2^(depth-1) terminal slots available
+        
+        // Ensure both subtrees get a fair distribution of compatible variables
+        let compatible_count = compatible_vars.len();
+        if compatible_count > 0 {
+            let left_allocation = (compatible_count + 1) / 2; // Ceiling division
             
-            if force_nonterminal || rng.gen_bool(0.5) {
-                if !compatible_vars.is_empty() && rng.gen_bool(0.3) {
-                    // 30% chance to use a required variable
-                    let var = compatible_vars.into_iter().next().unwrap();
-                    required_variables.retain(|v| v.name != var.name);
-                    self.add_variable_terminal(var.data_type, var.shape, var.name, parent_idx)
+            // Distribute compatible variables
+            for (i, var) in compatible_vars.into_iter().enumerate() {
+                if i < left_allocation {
+                    left_vars.push(var.clone());
                 } else {
-                    // Generate a non-terminal
-                    let node_idx = self.add_non_terminal(required_type, required_shape, parent_idx);
-
-                    let (left_vars, right_vars) = self.split_required_variables(required_variables);
-
-                    let left_idx = self.generate_grow_tree_with_variables(max_depth - 1, required_type, required_shape, left_vars, node_idx);
-                    let right_idx = self.generate_grow_tree_with_variables(max_depth - 1, required_type, required_shape, right_vars, node_idx);
-
-                    if let Some(node) = self.arena.get_mut(node_idx) {
-                        node.left = Some(left_idx);
-                        node.right = Some(right_idx);
-                    }
-
-                    node_idx
+                    right_vars.push(var.clone());
                 }
-            } else {
-                // Generate terminal
-                if !compatible_vars.is_empty() && rng.gen_bool(0.5) {
-                    let var = compatible_vars.into_iter().next().unwrap();
-                    required_variables.retain(|v| v.name != var.name);
-                    self.add_variable_terminal(var.data_type, var.shape, var.name, parent_idx)
-                } else {
-                    self.add_terminal(required_type, required_shape, parent_idx)
-                }
+                // Remove from original list
+                variables.retain(|v| v.name != var.name);
             }
         }
-    }
 
-    fn split_required_variables(&self, mut variables: Vec<Variable>) -> (Vec<Variable>, Vec<Variable>) {
-        let mut rng = rand::thread_rng();
-        let mut left_vars = Vec::new();
-        let mut right_vars = Vec::new();
-
-        // Randomly distribute variables between left and right subtrees
+        // Distribute remaining incompatible variables randomly
+        let mut rng = rand::rng();
         for var in variables.drain(..) {
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 left_vars.push(var);
             } else {
                 right_vars.push(var);
@@ -347,6 +286,7 @@ impl Arena {
 
         (left_vars, right_vars)
     }
+
 
     pub fn validate_required_variables(&self, required_variables: &[Variable]) -> Result<(), String> {
         let mut found_variables = HashSet::new();

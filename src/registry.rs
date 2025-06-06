@@ -7,34 +7,34 @@ pub struct TypeRegistry;
 
 impl TypeRegistry {
     pub fn create_random_terminal(data_type: DataType, shape: Shape) -> Box<dyn Any> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         match (data_type, shape) {
             (DataType::Integer, Shape::Scalar) => {
-                let value: i64 = rng.gen_range(-100..=100);
+                let value: i64 = rng.random_range(-100..=100);
                 Box::new(value)
             }
             (DataType::Float, Shape::Scalar) => {
-                let value: f64 = rng.gen_range(-100.0..=100.0);
+                let value: f64 = rng.random_range(-100.0..=100.0);
                 Box::new(value)
             }
             (DataType::Integer, Shape::Vector(size)) => {
-                let value: Vec<i64> = (0..size).map(|_| rng.gen_range(-100..=100)).collect();
+                let value: Vec<i64> = (0..size).map(|_| rng.random_range(-100..=100)).collect();
                 Box::new(value)
             }
             (DataType::Float, Shape::Vector(size)) => {
-                let value: Vec<f64> = (0..size).map(|_| rng.gen_range(-100.0..=100.0)).collect();
+                let value: Vec<f64> = (0..size).map(|_| rng.random_range(-100.0..=100.0)).collect();
                 Box::new(value)
             }
             (DataType::Integer, Shape::Matrix(rows, cols)) => {
                 let value: Vec<Vec<i64>> = (0..rows)
-                    .map(|_| (0..cols).map(|_| rng.gen_range(-100..=100)).collect())
+                    .map(|_| (0..cols).map(|_| rng.random_range(-100..=100)).collect())
                     .collect();
                 Box::new(value)
             }
             (DataType::Float, Shape::Matrix(rows, cols)) => {
                 let value: Vec<Vec<f64>> = (0..rows)
-                    .map(|_| (0..cols).map(|_| rng.gen_range(-100.0..=100.0)).collect())
+                    .map(|_| (0..cols).map(|_| rng.random_range(-100.0..=100.0)).collect())
                     .collect();
                 Box::new(value)
             }

@@ -1,6 +1,6 @@
-use crate::types::{ DataType, Shape};
+use crate::types::{ DataType};
 use crate::ops::{Operation};
-use crate::node::{NodeType, Node};
+use crate::node::{ Node};
 use std::fmt;
 
 

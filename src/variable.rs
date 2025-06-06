@@ -4,30 +4,11 @@
 
 use std::collections::HashMap;
 use std::any::Any;
-use crate::types::{DataType, Shape};
 
-#[derive(Debug)]
-pub struct Variable {
-    pub name: String,
-    pub data_type: DataType,
-    pub shape: Shape,
-    pub value: Box<dyn Any>,
-}
-
-impl Variable {
-    pub fn new<T: 'static>(name: String, data_type: DataType, shape: Shape, value: T) -> Self {
-        Variable {
-            name,
-            data_type,
-            shape,
-            value: Box::new(value),
-        }
-    }
-}
-
+// Simple mapping from String => Value
 #[derive(Debug, Default)]
 pub struct VariableContext {
-    variables: HashMap<String, Variable>,
+    variables: HashMap<String, Box<dyn Any>>,
 }
 
 impl VariableContext {
@@ -37,29 +18,22 @@ impl VariableContext {
         }
     }
 
-    pub fn add_variable(&mut self, variable: Variable) {
-        self.variables.insert(variable.name.clone(), variable);
+    // remember, type is enforced in the actual tree.
+    pub fn add_variable(&mut self, name: String, value: Box<dyn Any>) {
+        self.variables.insert(name.clone(), value);
     }
 
-    pub fn get_variable(&self, name: &str) -> Option<&Variable> {
+    pub fn get_variable(&self, name: &str) -> Option<&Box<dyn Any>> {
         self.variables.get(name)
     }
 
-    pub fn set_variable_value<T: 'static>(&mut self, name: &str, value: T) -> Result<(), String> {
+    pub fn set_variable_value(&mut self, name: &str, value: Box<dyn Any>) -> Result<(), String> {
         if let Some(variable) = self.variables.get_mut(name) {
-            variable.value = Box::new(value);
+            *variable = value;  // Dereference to assign new value
             Ok(())
         } else {
             Err(format!("Variable '{}' not found", name))
         }
-    }
-
-    pub fn get_variable_value(&self, name: &str) -> Option<&Box<dyn Any>> {
-        self.variables.get(name).map(|var| &var.value)
-    }
-
-    pub fn get_variable_type(&self, name: &str) -> Option<(DataType, Shape)> {
-        self.variables.get(name).map(|var| (var.data_type, var.shape))
     }
 }
 

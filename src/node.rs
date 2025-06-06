@@ -84,20 +84,8 @@ impl Node {
                 // Check if this terminal is a variable
                 if let Some(variable_id) = &self.variable_id {
                     // Look up the variable value in the context
-                    if let Some(var_value) = context.get_variable_value(variable_id) {
-                        // Verify type compatibility
-                        if let Some((var_data_type, var_shape)) = context.get_variable_type(variable_id) {
-                            if var_data_type == data_type && var_shape == shape {
-                                TypeRegistry::extract_terminal(var_value, data_type, shape)
-                            } else {
-                                Err(format!(
-                                    "Variable '{}' type mismatch: expected {:?} {:?}, found {:?} {:?}",
-                                    variable_id, data_type, shape, var_data_type, var_shape
-                                ))
-                            }
-                        } else {
-                            Err(format!("Variable '{}' type information not found", variable_id))
-                        }
+                    if let Some(var_value) = context.get_variable(variable_id) {
+                        TypeRegistry::extract_terminal(var_value, data_type, shape)
                     } else {
                         Err(format!("Variable '{}' not found in context", variable_id))
                     }
