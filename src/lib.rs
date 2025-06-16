@@ -6,3 +6,6 @@ pub mod node;
 pub mod ops;
 pub mod registry;
 pub mod shape;
+pub mod grammar;
+pub mod possibilities_tables;
+pub mod nonterminal;

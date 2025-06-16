@@ -1,6 +1,6 @@
 use crate::types::{ DataType};
 use crate::ops::{Operation};
-use crate::node::{ Node};
+// use crate::node::{Node};
 use std::fmt;
 
 
@@ -23,12 +23,12 @@ impl fmt::Display for Operation {
     }
 }
 
-impl fmt::Display for Node {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Node Index {} \n", self.idx)
-        // write!(f, "Value {} \n", self.value)
-    }
-}
+// impl fmt::Display for Node {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "Node Index {} \n", self.idx)
+//         // write!(f, "Value {} \n", self.value)
+//     }
+// }
 
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
