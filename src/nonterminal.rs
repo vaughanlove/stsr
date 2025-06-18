@@ -8,6 +8,7 @@ struct NonTerminal {
     output: TypeInfo,
     operation: Operation 
 }
+#[derive(Debug)]
 
 pub struct NonTerminalRule {
     pub input_one_type: TypeInfo,
@@ -42,7 +43,7 @@ impl NonTerminalRule {
     ) -> Self {
         let scalar_type = TypeInfo { 
             shape: crate::types::Shape::Scalar, 
-            _type: data_type 
+            data_type: data_type 
         };
         Self::new(scalar_type, scalar_type, operation, scalar_type, func)
     }
@@ -53,6 +54,7 @@ impl NonTerminalRule {
     }
 }
 
+#[derive(Debug)]
 /// meant to be user-defined
 pub struct NonTerminalGrammar {
     pub rules: Vec<NonTerminalRule>
@@ -75,8 +77,22 @@ impl NonTerminalGrammar {
         };
 
         // a rule should have both left/right combos.
+        if (rule.input_one_type != rule.input_two_type) {
+            self.rules.push(swapped);
+        }
         self.rules.push(rule);
-        self.rules.push(swapped);
+    }
+
+    pub fn get_all_possible_input_types_with_operations(&self, output_type: TypeInfo) -> Vec<(TypeInfo, TypeInfo, Operation)> {
+        let mut temp: Vec<(TypeInfo, TypeInfo, Operation)> = Vec::new();
+
+        for rule in &self.rules {
+            if rule.output == output_type {
+                temp.push((rule.input_one_type, rule.input_two_type, rule.operation))
+            }
+        }
+
+        temp
     }
 }
 

@@ -27,15 +27,15 @@ cargo clippy
 
 ## Architecture
 
-The codebase follows a modular design centered around typed syntax trees:
+The codebase follows a modular design centered around typed syntax trees with the following key components:
 
-- **Type System (`types.rs`)**: Defines `DataType` (Integer, Float) and `Shape` (Scalar, Vector, Matrix) that form the foundation of the type constraints
-- **Node Structure (`node.rs`)**: Core `Node` struct with arena-based indexing, supporting both Terminal and NonTerminal node types. Uses `Box<dyn Any>` for type-erased values and implements `MatchesTerminal` trait for type safety
+- **Type System (`types.rs`)**: Core foundation with `DataType` (Integer, Float), `Shape` (Scalar, Vector, Matrix), and `TypeInfo` struct. Includes `VariableDefinitions` and `Dataset` for strongly-typed data handling
+- **Node Structure (`node.rs`)**: Arena-based `Node` struct with type-erased values using `Box<dyn Any>`. Supports both Terminal and NonTerminal node types with parent/child indexing
+- **NonTerminal Grammar (`nonterminal.rs`)**: Implements `NonTerminalRule` and `NonTerminalGrammar` for defining operations and their type constraints with user-provided computation functions
 - **Operations (`ops.rs`)**: Mathematical operations (Add, Subtract, Multiply, Divide) for NonTerminal nodes
-- **Arena Management (`arena.rs`)**: Currently commented out tree generation logic for Full and Grow methods
-- **Display (`display.rs`)**: Tree visualization functionality
-- **Variable Registry (`variable.rs`, `registry.rs`)**: Support for named variables and type registries
+- **Tree Building (`tree_builder.rs`)**: `TreeOrchestrator` manages parse trees, datasets, and variable definitions for genetic programming evolution
+- **Variable System (`variable.rs`)**: Runtime variable context and strongly-typed variable definitions
 
-The system uses arena-based allocation where nodes reference each other by index rather than direct pointers, allowing for efficient memory management and tree manipulation operations.
+The system uses arena-based allocation where nodes reference each other by index rather than direct pointers. The `NonTerminalGrammar` allows users to define custom operations with type constraints and computation functions.
 
 Key design principle: All nodes must satisfy type constraints - the root returns the required problem type, and each non-root node returns a type that matches its parent's argument requirements.

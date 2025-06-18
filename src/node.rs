@@ -1,6 +1,6 @@
 use crate::ops::Operation;
 use crate::types::{DataType, Shape, TypeInfo};
-use crate::registry::TypeRegistry;
+// use crate::registry::TypeRegistry;
 use crate::variable::VariableContext;
 use std::any::Any;
 
@@ -22,31 +22,31 @@ pub enum NodeType {
 pub fn compatible_outputs(input1: TypeInfo, input2: TypeInfo, op: Operation) -> Vec<TypeInfo> {
     use crate::types::{DataType, Shape};
     
-    match (input1.shape, input2.shape, op, input1._type == input2._type) {
+    match (input1.shape, input2.shape, op, input1.data_type == input2.data_type) {
         // Scalar + Scalar
         (Shape::Scalar, Shape::Scalar, _, true) => {
-            vec![TypeInfo { _type: input1._type, shape: Shape::Scalar }]
+            vec![TypeInfo { data_type: input1.data_type, shape: Shape::Scalar }]
         },
         
         // Vector + Vector (same size)
         (Shape::Vector(n1), Shape::Vector(n2), _, true) if n1 == n2 => {
-            vec![TypeInfo { _type: input1._type, shape: Shape::Vector(n1) }]
+            vec![TypeInfo { data_type: input1.data_type, shape: Shape::Vector(n1) }]
         },
         
         // Vector + Scalar broadcasting
         (Shape::Vector(n), Shape::Scalar, _, true) | (Shape::Scalar, Shape::Vector(n), _, true) => {
-            vec![TypeInfo { _type: input1._type, shape: Shape::Vector(n) }]
+            vec![TypeInfo { data_type: input1.data_type, shape: Shape::Vector(n) }]
         },
         
         // Matrix + Matrix
         (Shape::Matrix(r1, c1), Shape::Matrix(r2, c2), Operation::Add | Operation::Subtract, true) 
             if r1 == r2 && c1 == c2 => {
-            vec![TypeInfo { _type: input1._type, shape: Shape::Matrix(r1, c1) }]
+            vec![TypeInfo { data_type: input1.data_type, shape: Shape::Matrix(r1, c1) }]
         },
         
         // Matrix multiplication
         (Shape::Matrix(m, n1), Shape::Matrix(n2, p), Operation::Multiply, true) if n1 == n2 => {
-            vec![TypeInfo { _type: input1._type, shape: Shape::Matrix(m, p) }]
+            vec![TypeInfo { data_type: input1.data_type, shape: Shape::Matrix(m, p) }]
         },
         
         _ => vec![],
@@ -54,63 +54,63 @@ pub fn compatible_outputs(input1: TypeInfo, input2: TypeInfo, op: Operation) -> 
 }
 
 /// Given an operation and desired output, return possible input pairs
-pub fn compatible_inputs(op: Operation, output: TypeInfo) -> Vec<(TypeInfo, TypeInfo)> {
-    use crate::types::{DataType, Shape};
+// pub fn compatible_inputs(op: Operation, output: TypeInfo) -> Vec<(TypeInfo, TypeInfo)> {
+//     use crate::types::{DataType, Shape};
     
-    let mut inputs = Vec::new();
+//     let mut inputs = Vec::new();
     
-    match (op, output.shape) {
-        // Scalar output
-        (_, Shape::Scalar) => {
-            // Scalar + Scalar -> Scalar
-            let scalar_type = TypeInfo { _type: output._type, shape: Shape::Scalar };
-            inputs.push((scalar_type, scalar_type));
-        },
+//     match (op, output.shape) {
+//         // Scalar output
+//         (_, Shape::Scalar) => {
+//             // Scalar + Scalar -> Scalar
+//             let scalar_type = TypeInfo { _type: output._type, shape: Shape::Scalar };
+//             inputs.push((scalar_type, scalar_type));
+//         },
         
-        // Vector output
-        (_, Shape::Vector(n)) => {
-            let vector_type = TypeInfo { _type: output._type, shape: Shape::Vector(n) };
-            let scalar_type = TypeInfo { _type: output._type, shape: Shape::Scalar };
+//         // Vector output
+//         (_, Shape::Vector(n)) => {
+//             let vector_type = TypeInfo { _type: output._type, shape: Shape::Vector(n) };
+//             let scalar_type = TypeInfo { _type: output._type, shape: Shape::Scalar };
             
-            // Vector + Vector -> Vector
-            inputs.push((vector_type, vector_type));
-            // Vector + Scalar -> Vector (broadcasting)
-            inputs.push((vector_type, scalar_type));
-            inputs.push((scalar_type, vector_type));
-        },
+//             // Vector + Vector -> Vector
+//             inputs.push((vector_type, vector_type));
+//             // Vector + Scalar -> Vector (broadcasting)
+//             inputs.push((vector_type, scalar_type));
+//             inputs.push((scalar_type, vector_type));
+//         },
         
-        // Matrix output
-        (Operation::Add | Operation::Subtract, Shape::Matrix(r, c)) => {
-            let matrix_type = TypeInfo { _type: output._type, shape: Shape::Matrix(r, c) };
-            // Matrix + Matrix -> Matrix (element-wise)
-            inputs.push((matrix_type, matrix_type));
-        },
+//         // Matrix output
+//         (Operation::Add | Operation::Subtract, Shape::Matrix(r, c)) => {
+//             let matrix_type = TypeInfo { _type: output._type, shape: Shape::Matrix(r, c) };
+//             // Matrix + Matrix -> Matrix (element-wise)
+//             inputs.push((matrix_type, matrix_type));
+//         },
         
-        (Operation::Multiply, Shape::Matrix(m, p)) => {
-            // For matrix multiplication, we need to generate all valid (m,k) * (k,p) combinations
-            // This is a simplification - in practice you'd iterate over reasonable k values
-            for k in 1..=10 { // arbitrary limit for example
-                let left_matrix = TypeInfo { _type: output._type, shape: Shape::Matrix(m, k) };
-                let right_matrix = TypeInfo { _type: output._type, shape: Shape::Matrix(k, p) };
-                inputs.push((left_matrix, right_matrix));
-            }
-        },
+//         (Operation::Multiply, Shape::Matrix(m, p)) => {
+//             // For matrix multiplication, we need to generate all valid (m,k) * (k,p) combinations
+//             // This is a simplification - in practice you'd iterate over reasonable k values
+//             for k in 1..=10 { // arbitrary limit for example
+//                 let left_matrix = TypeInfo { _type: output._type, shape: Shape::Matrix(m, k) };
+//                 let right_matrix = TypeInfo { _type: output._type, shape: Shape::Matrix(k, p) };
+//                 inputs.push((left_matrix, right_matrix));
+//             }
+//         },
         
-        _ => {},
-    }
+//         _ => {},
+//     }
     
-    inputs
-}
+//     inputs
+// }
 
 #[derive(Debug)]
 pub struct Node {
     pub idx: usize,
-    pub variable_id: Option<String>, // for generics that need to pull value from variable.rs HashMap.
     pub _type: NodeType, // for GPSR
     pub value: Box<dyn Any>,
-    pub left: Option<usize>,
-    pub right: Option<usize>,
-    pub parent: usize,
+    pub variable_id: Option<String>, // for generics that need to pull value from variable.rs HashMap.
+    pub left_index: Option<usize>,
+    pub right_index: Option<usize>,
+    pub parent_index: usize,
 }
 
 // pub trait MatchesTerminal {
@@ -248,18 +248,18 @@ impl Node {
         left_type: TypeInfo,
         right_type: TypeInfo,
         output_type: TypeInfo,
-        left: usize,
-        right: usize,
-        parent: usize,
+        left_index: usize,
+        right_index: usize,
+        parent_index: usize,
     ) -> Self {
         Node {
             idx,
             variable_id,
             _type: NodeType::NonTerminal(left_type, right_type, operation, output_type),
             value: Box::new(value),
-            left: Some(left),
-            right: Some(right),
-            parent,
+            left_index: Some(left_index),
+            right_index: Some(right_index),
+            parent_index,
         }
     }
 }

@@ -5,17 +5,15 @@ use std::collections::HashSet;
 use std::vec::Vec;
 use crate::types::TypeInfo;
 
-struct PossibilityTable {
+#[derive(Debug)]
+pub struct PossibilityTable {
     possibilities: Vec<HashSet<TypeInfo>>
 }
 
 impl PossibilityTable {
-    fn init(terminal_set: Vec<TypeInfo>, max_depth: usize) -> Self {
-        for i in 1..max_depth {
-            
-        }
+    pub fn empty(max_depth: usize) -> Self {        
         PossibilityTable { 
-            possibilities: Vec::new() 
+            possibilities: Vec::with_capacity(max_depth)
         }
     }
 }
