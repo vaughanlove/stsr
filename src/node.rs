@@ -1,5 +1,6 @@
+use crate::nonterminal::NonTerminalGrammar;
 use crate::ops::Operation;
-use crate::types::{DataType, Shape, TypeInfo};
+use crate::types::{DataRow, DataType, Shape, TypeInfo};
 // use crate::registry::TypeRegistry;
 use crate::variable::VariableContext;
 use std::any::Any;
@@ -162,9 +163,7 @@ pub struct Node {
 
 
 impl Node {
-//     pub fn evaluate(&self, arena: &[Node]) -> Result<Box<dyn std::any::Any>, String> {
-//         self.evaluate_with_context(arena, &VariableContext::new())
-//     }
+
 
 //     pub fn evaluate_with_context(&self, arena: &[Node], context: &VariableContext) -> Result<Box<dyn std::any::Any>, String> {
 //         match self._type {
@@ -239,6 +238,10 @@ impl Node {
 //             parent,
 //         }
 //     }
+
+    pub fn is_leaf_node(&self) -> bool {
+        self.left_index.is_none() && self.right_index.is_none()
+    }
 
     pub fn new_non_terminal<T: 'static>(
         idx: usize,

@@ -24,4 +24,27 @@ Vec<Box<dyn Node>> - which can be interpreted as Vector of Boxes of any type tha
 
 
 
-note - 
+
+## todo 
+
+future: use macros to populate the NonTerminalGrammar to make the user API experience better 
+
+ What's left (roughly estimated):
+
+  Day 1-2: Tree Evaluation (~4-6 hours)
+  - tree walker that substitutes variables and calls operations 
+
+  Day 3-4: Fitness & Evolution (~6-8 hours)
+  - Basic fitness functions (MSE, etc.)
+  - Simple mutation (subtree replacement)
+  - Basic crossover (subtree swapping)
+  - Population management
+
+  Day 5-6: Polish & Testing (~4-6 hours)
+  - Integration testing
+  - Bug fixes
+  - Maybe add a few unary operations (sin/cos)
+
+  Day 7: Documentation/Examples (~2-4 hours)
+  - Clean up the API
+  - Add some example problems

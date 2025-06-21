@@ -1,21 +1,21 @@
 /// Base Types in the system. 
 /// 
 /// TODO: The developer needs a way to specify a subset of these for their genetic program. 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DataType {
     Integer,
     Float,
 }
 
 /// The shape that a terminal can take. 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Shape {
     Scalar,
     Vector(usize),
     Matrix(usize, usize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeInfo {
     pub shape: Shape,
     pub data_type: DataType
@@ -30,6 +30,7 @@ pub struct Variable {
 
 use std::collections::HashMap;
 use std::any::Any;
+use std::rc::Rc;
 
 // Variable definitions with explicit ordering and validation
 #[derive(Debug, Clone)]
@@ -74,10 +75,9 @@ pub enum GenerationMethod {
     Grow,
 }
 
-// Strongly typed data row that must match variable definitions
 #[derive(Debug)]
 pub struct DataRow {
-    pub values: HashMap<String, Box<dyn Any>>,
+    pub values: HashMap<String, Rc<dyn Any>>,
 }
 
 impl DataRow {
@@ -93,7 +93,7 @@ impl DataRow {
         
         let mut row_values = HashMap::new();
         for (_, var) in variable_defs.variables.iter().enumerate() {
-            row_values.insert(var.name.clone(), values.remove(0));
+            row_values.insert(var.name.clone(), Rc::from(values.remove(0)));
         }
         
         Ok(DataRow { values: row_values })
@@ -101,29 +101,42 @@ impl DataRow {
     
     // Alternative constructor with explicit key-value pairs (with validation)
     pub fn from_map(variable_defs: &VariableDefinitions, values: HashMap<String, Box<dyn Any>>) -> Result<Self, String> {
-        let row = DataRow { values };
+        let rc_values: HashMap<String, Rc<dyn Any>> = values
+            .into_iter()
+            .map(|(k, v)| (k, Rc::from(v)))
+            .collect();
+        let row = DataRow { values: rc_values };
         variable_defs.validate_data_row(&row)?;
         Ok(row)
     }
+}
+#[derive(Debug)]
+pub enum EvalInput<'a> {
+    Data(&'a DataRow, &'a Rc<dyn Any>)
 }
 
 // Dataset containing input rows and expected outputs
 #[derive(Debug)]
 pub struct Dataset {
-    pub inputs: Vec<DataRow>,
-    pub expected_outputs: Vec<Box<dyn Any>>,
+    pub features: Vec<DataRow>,
+    pub targets: Vec<Rc<dyn Any>>,
 }
 
 impl Dataset {
-    pub fn new(inputs: Vec<DataRow>, expected_outputs: Vec<Box<dyn Any>>) -> Result<Self, String> {
-        if inputs.len() != expected_outputs.len() {
+    pub fn new(features: Vec<DataRow>, targets: Vec<Box<dyn Any>>) -> Result<Self, String> {
+        if features.len() != targets.len() {
             return Err(format!(
-                "Number of input rows ({}) must match number of expected outputs ({})",
-                inputs.len(),
-                expected_outputs.len()
+                "Number of features ({}) must match number of targets ({})",
+                features.len(),
+                targets.len()
             ));
         }
         
-        Ok(Dataset { inputs, expected_outputs })
+        let rc_targets: Vec<Rc<dyn Any>> = targets.into_iter().map(Rc::from).collect();
+        Ok(Dataset { features, targets: rc_targets })
+    }
+
+    pub fn sample_row(&self, index: usize) -> EvalInput {
+        EvalInput::Data(&self.features[index], &self.targets[index])
     }
 }
