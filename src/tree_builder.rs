@@ -7,6 +7,7 @@
 
 use crate::{
     node::Node,
+    node::NodeType,
     nonterminal::{NonTerminalGrammar, NonTerminalRule},
     possibilities_tables::PossibilityTable,
     types::{
@@ -21,6 +22,7 @@ use std::{any::Any, rc::Rc};
 #[derive(Debug)]
 pub struct ParseTree {
     pub id: usize,
+    pub fitness: f64,
     pub tree: Vec<Node>,
 }
 
@@ -28,20 +30,67 @@ impl ParseTree {
     fn empty(id: usize) -> Self {
         ParseTree {
             id,
+            fitness: 0.0,
             tree: Vec::new(),
         }
     }
 
-    fn insert_node() {
-        unimplemented!();
+    fn evaluate_fitness(&mut self, dataset: &Dataset, grammar: &NonTerminalGrammar) {
+        let mut fitness: f64 = 0.0;
+
+        for eval_input in dataset.iter() {
+            self.evaluate(&eval_input, grammar);
+
+            // Extract target from EvalInput
+            let target = match eval_input {
+                EvalInput::Data(_, target_rc) => target_rc,
+            };
+
+            // Get prediction from tree
+            let prediction = match &self.tree[0]._type {
+                NodeType::NonTerminal(_,_,_,TypeInfo {
+                    shape: _,
+                    data_type: DataType::Float,
+                }) => {
+                    let value = self.tree[0].value.downcast_ref::<f64>().unwrap();
+                    *value
+                }
+                NodeType::NonTerminal(_,_,_,TypeInfo {
+                    shape: _,
+                    data_type: DataType::Integer,
+                }) => {
+                    let value = self.tree[0].value.downcast_ref::<i32>().unwrap();
+                    *value as f64 // Convert to f64 for consistent math
+                }
+                _ => {
+                    panic!(
+                        "Cannot evaluate fitness: node at index 0 has invalid type {:?}",
+                        self.tree[0]._type
+                    );
+                }
+            };
+            
+            // Downcast target and compute loss
+            let loss = if let Some(target_f64) = target.downcast_ref::<f64>() {
+                (prediction - target_f64).abs() // L1 loss
+            } else if let Some(target_i32) = target.downcast_ref::<i32>() {
+                (prediction - (*target_i32 as f64)).abs() // L1 loss
+            } else {
+                // Handle unsupported target type
+                eprintln!("Unsupported target type");
+                continue;
+            };
+
+            fitness += loss;
+        }
+
+        self.fitness = fitness;
+        println!("TREE HAD FITNESS {:?}", &self.fitness);
     }
 
-    fn delete_node() {
-        unimplemented!();
-    }
     fn evaluate(&mut self, data: &EvalInput, grammar: &NonTerminalGrammar) {
         match data {
-            EvalInput::Data(vars, target) => {
+            EvalInput::Data(vars, _) => {
                 for i in (0..self.tree.len()).rev() {
                     if !self.tree[i].is_leaf_node() {
                         self.evaluate_node_at_index(i, vars, grammar);
@@ -55,16 +104,13 @@ impl ParseTree {
         match (self.tree[idx].left_index, self.tree[idx].right_index) {
             // NonTerminal node - evaluate using child values
             (Some(left_idx), Some(right_idx)) => {
-                // Get the operation from the current node's type
-                println!("{:?}, {:?}", left_idx, right_idx);
-                
                 // Find matching rule in grammar
                 let rule = self.find_matching_rule_for_node(idx, grammar).unwrap();
-                
+
                 // Execute the operation with child values
                 let result = rule.execute(
-                    self.tree[left_idx].value.as_ref(), 
-                    self.tree[right_idx].value.as_ref()
+                    self.tree[left_idx].value.as_ref(),
+                    self.tree[right_idx].value.as_ref(),
                 );
                 // Store result in current node
                 self.tree[idx].value = result;
@@ -72,28 +118,38 @@ impl ParseTree {
             // Terminal node - handle variable lookup if needed
             (None, None) => {
                 if let Some(variable_id) = &self.tree[idx].variable_id {
-                    let var_value = vars.values.get(variable_id)
+                    let var_value = vars
+                        .values
+                        .get(variable_id)
                         .expect(&format!("Variable '{}' not found in data row", variable_id));
+                    // Convert Rc<dyn Any> to Box<dyn Any>
+                    // We clone the Rc (cheap) and then convert it to Box
                     self.tree[idx].value = Box::new(var_value.clone());
                 }
                 // If no variable_id, value is already set (constant terminal)
             }
-            _ => panic!("Invalid node configuration: partial children")
+            _ => panic!("Invalid node configuration: partial children"),
         }
     }
-    
-    fn find_matching_rule_for_node<'a>(&self, idx: usize, grammar: &'a NonTerminalGrammar) -> Result<&'a NonTerminalRule, String> {
+
+    fn find_matching_rule_for_node<'a>(
+        &self,
+        idx: usize,
+        grammar: &'a NonTerminalGrammar,
+    ) -> Result<&'a NonTerminalRule, String> {
         let (input1_type, input2_type, operation, output_type) = match self.tree[idx]._type {
             crate::node::NodeType::NonTerminal(i1, i2, op, o) => (i1, i2, op, o),
             _ => return Err("Expected NonTerminal node type".to_string()),
         };
-        
-        grammar.rules.iter()
+
+        grammar
+            .rules
+            .iter()
             .find(|rule| {
-                rule.operation == operation &&
-                rule.input_one_type == input1_type &&
-                rule.input_two_type == input2_type &&
-                rule.output == output_type
+                rule.operation == operation
+                    && rule.input_one_type == input1_type
+                    && rule.input_two_type == input2_type
+                    && rule.output == output_type
             })
             .ok_or_else(|| format!("No matching rule found for operation {:?}", operation))
     }
@@ -149,6 +205,8 @@ impl ParseTree {
             // If the type is not possible at this depth, we have a constraint violation
             // This should not happen with a properly constructed possibilities table,
             // but we'll handle it gracefully by creating a terminal
+
+            // todo, make this panic?
             return self.create_terminal_node(
                 required_type,
                 variable_definitions,
@@ -517,6 +575,14 @@ impl TreeOrchestrator {
     pub fn evaluate_trees<'a>(&mut self, data: &'a EvalInput) {
         for tree in &mut self.trees {
             tree.evaluate(data, &self.nt_grammar);
+        }
+    }
+
+    /// Evaluates the trees fitness values against the internally stored Dataset.
+    /// Stores their fitness value in each ParseTree.
+    pub fn evaluate_fitness(&mut self) {
+        for tree in self.trees.iter_mut() {
+            tree.evaluate_fitness(&self.dataset, &self.nt_grammar);
         }
     }
 

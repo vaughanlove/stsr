@@ -68,18 +68,19 @@ impl NonTerminalGrammar {
     }
 
     pub fn add_rule(&mut self, rule: NonTerminalRule) {
-        let swapped = NonTerminalRule {
-            input_one_type: rule.input_two_type,
-            input_two_type: rule.input_one_type,
-            output: rule.output,
-            operation: rule.operation,
-            func: rule.func
-        };
+        // swapped needs to be adapted to modify func as well (the type casting breaks)
+        // let swapped = NonTerminalRule {
+        //     input_one_type: rule.input_two_type,
+        //     input_two_type: rule.input_one_type,
+        //     output: rule.output,
+        //     operation: rule.operation,
+        //     func: rule.func
+        // };
 
-        // a rule should have both left/right combos.
-        if (rule.input_one_type != rule.input_two_type) {
-            self.rules.push(swapped);
-        }
+        // // a rule should have both left/right combos.
+        // if (rule.input_one_type != rule.input_two_type) {
+        //     self.rules.push(swapped);
+        // }
         self.rules.push(rule);
     }
 

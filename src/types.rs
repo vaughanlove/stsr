@@ -139,4 +139,13 @@ impl Dataset {
     pub fn sample_row(&self, index: usize) -> EvalInput {
         EvalInput::Data(&self.features[index], &self.targets[index])
     }
+
+    /// Returns an iterator to a Vec<EvalInput>
+    pub fn iter(&self) -> impl Iterator<Item = EvalInput<'_>> + '_ {
+        self.features.iter()
+            .zip(self.targets.iter())
+            .map(|(feature, target)| EvalInput::Data(feature, target))
+    }
+
+
 }

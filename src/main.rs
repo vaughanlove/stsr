@@ -138,6 +138,15 @@ fn test_random_tree_generation() {
         }
     );
     
+    let int_float_to_float_reversed_inputs = stsr::nonterminal::NonTerminalRule::new(
+        scalar_float, scalar_int, Operation::Multiply, scalar_float,
+        |a, b| {
+            let val_a = a.downcast_ref::<f64>().unwrap();
+            let val_b = b.downcast_ref::<i32>().unwrap();
+            Box::new(val_a * (*val_b as f64)) 
+        }
+    );
+
     // Add type conversion: Integer -> Float
     let int_to_float_rule = stsr::nonterminal::NonTerminalRule::new(
         scalar_int, scalar_int, Operation::Add, scalar_float, // Using add as a "convert" operation
@@ -152,6 +161,7 @@ fn test_random_tree_generation() {
     nt_grammar.add_rule(float_mult_rule);
     nt_grammar.add_rule(float_int_to_int);
     nt_grammar.add_rule(int_float_to_float);
+    nt_grammar.add_rule(int_float_to_float_reversed_inputs);
     nt_grammar.add_rule(int_to_float_rule);
     
     // Create variable definitions with mixed types
@@ -186,7 +196,7 @@ fn test_random_tree_generation() {
     );
     
     // Generate a single random tree
-    orchestrator.generate_trees(1);
+    orchestrator.generate_trees(5);
     
     println!("Generated tree orchestrator with {} trees", orchestrator.trees.len());
     
@@ -217,7 +227,7 @@ fn test_random_tree_generation() {
     let tval = Rc::new(8.0f64) as Rc<dyn Any>;
     let data = EvalInput::Data(&rdata, &tval);
 
-    orchestrator.evaluate_trees(&data);
+    orchestrator.evaluate_fitness();
 }
 
 fn print_tree_structure(tree: &stsr::tree_builder::ParseTree) {
