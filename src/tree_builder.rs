@@ -6,15 +6,10 @@
 //! the outputs/inputs defined in the Non-terminal Grammar.
 
 use crate::{
-    node::Node,
-    node::NodeType,
-    nonterminal::{NonTerminalGrammar, NonTerminalRule},
-    possibilities_tables::PossibilityTable,
-    types::{
+    node::{Node, NodeType}, nonterminal::{NonTerminalGrammar, NonTerminalRule}, possibilities_tables::PossibilityTable, types::{
         DataRow, DataType, Dataset, EvalInput, GenerationMethod, Shape, TypeInfo, Variable,
         VariableDefinitions,
-    },
-    variable::VariableContext,
+    }, utils::l1_loss_to_reciprocal_fitness, variable::VariableContext
 };
 use rand::Rng;
 use std::{any::Any, rc::Rc};
@@ -27,7 +22,9 @@ pub struct ParseTree {
 }
 
 impl ParseTree {
-    fn empty(id: usize) -> Self {
+
+    /// instantiate a empty parse tree. public temporarily for testing.
+    pub fn empty(id: usize) -> Self {
         ParseTree {
             id,
             fitness: 0.0,
@@ -35,12 +32,20 @@ impl ParseTree {
         }
     }
 
-    fn evaluate_fitness(&mut self, dataset: &Dataset, grammar: &NonTerminalGrammar) {
-        let mut fitness: f64 = 0.0;
+    fn get_node_depth(&self, idx: usize) -> usize {
+        self.tree[idx].get_depth()
+    }
+
+    fn sample_random_node_idx(&self, rng: &mut impl Rng) -> usize{
+        rng.random_range(0..self.tree.len())
+    }
+
+    /// todo: remove pub or figure out better permissions for testing.
+    pub fn evaluate_fitness(&mut self, dataset: &Dataset, grammar: &NonTerminalGrammar) -> f64 {
+        let mut agg_loss: f64 = 0.0;
 
         for eval_input in dataset.iter() {
             self.evaluate(&eval_input, grammar);
-
             // Extract target from EvalInput
             let target = match eval_input {
                 EvalInput::Data(_, target_rc) => target_rc,
@@ -69,8 +74,10 @@ impl ParseTree {
                     );
                 }
             };
-            
+
             // Downcast target and compute loss
+            // This is hardcoded to the 2 fundamental types for now but something more generic is hopefully possible.
+            // this is not a flexible piece and needs to get refactored.
             let loss = if let Some(target_f64) = target.downcast_ref::<f64>() {
                 (prediction - target_f64).abs() // L1 loss
             } else if let Some(target_i32) = target.downcast_ref::<i32>() {
@@ -81,20 +88,18 @@ impl ParseTree {
                 continue;
             };
 
-            fitness += loss;
+            agg_loss += loss;
         }
 
-        self.fitness = fitness;
-        println!("TREE HAD FITNESS {:?}", &self.fitness);
+        self.fitness = l1_loss_to_reciprocal_fitness(agg_loss);
+        return self.fitness;
     }
 
     fn evaluate(&mut self, data: &EvalInput, grammar: &NonTerminalGrammar) {
         match data {
             EvalInput::Data(vars, _) => {
                 for i in (0..self.tree.len()).rev() {
-                    if !self.tree[i].is_leaf_node() {
-                        self.evaluate_node_at_index(i, vars, grammar);
-                    }
+                    self.evaluate_node_at_index(i, vars, grammar);
                 }
             }
         }
@@ -122,9 +127,15 @@ impl ParseTree {
                         .values
                         .get(variable_id)
                         .expect(&format!("Variable '{}' not found in data row", variable_id));
-                    // Convert Rc<dyn Any> to Box<dyn Any>
-                    // We clone the Rc (cheap) and then convert it to Box
-                    self.tree[idx].value = Box::new(var_value.clone());
+
+                    // Convert Rc<dyn Any> to Box<dyn Any> by cloning the inner value
+                    if let Some(int_val) = var_value.downcast_ref::<i32>() {
+                        self.tree[idx].value = Box::new(*int_val);
+                    } else if let Some(float_val) = var_value.downcast_ref::<f64>() {
+                        self.tree[idx].value = Box::new(*float_val);
+                    } else {
+                        panic!("Unsupported variable type in evaluation");
+                    }
                 }
                 // If no variable_id, value is already set (constant terminal)
             }
@@ -154,8 +165,17 @@ impl ParseTree {
             .ok_or_else(|| format!("No matching rule found for operation {:?}", operation))
     }
 
-    fn mutate(&mut self, nt_grammar: &NonTerminalGrammar) {
-        unimplemented!();
+    fn mutate(&mut self,         max_depth: usize,          required_type: TypeInfo,
+        nt_grammar: &NonTerminalGrammar,
+        variable_definitions: &VariableDefinitions,
+        rng: &mut impl Rng,
+        generation_method: GenerationMethod,
+        parent_idx: usize,
+        possibilities_table: &PossibilityTable,
+        ) {
+        
+        let depth = self.get_node_depth(self.sample_random_node_idx(rng));
+        self.generate_node_recursive(depth, max_depth, required_type, nt_grammar, variable_definitions, rng, generation_method, parent_idx, possibilities_table);
     }
 
     fn generate_random(
@@ -210,6 +230,7 @@ impl ParseTree {
             return self.create_terminal_node(
                 required_type,
                 variable_definitions,
+                current_depth,
                 rng,
                 current_idx,
                 parent_idx,
@@ -249,6 +270,7 @@ impl ParseTree {
             self.create_terminal_node(
                 required_type,
                 variable_definitions,
+                current_depth,
                 rng,
                 current_idx,
                 parent_idx,
@@ -270,10 +292,11 @@ impl ParseTree {
         }
     }
 
-    fn create_terminal_node(
+    pub fn create_terminal_node(
         &mut self,
         required_type: TypeInfo,
         variable_definitions: &VariableDefinitions,
+        depth: usize,
         rng: &mut impl Rng,
         current_idx: usize,
         parent_idx: usize,
@@ -301,6 +324,7 @@ impl ParseTree {
                     left_index: None,
                     right_index: None,
                     parent_index: parent_idx,
+                    depth
                 };
 
                 self.tree.push(terminal_node);
@@ -318,13 +342,14 @@ impl ParseTree {
             left_index: None,
             right_index: None,
             parent_index: parent_idx,
+            depth
         };
 
         self.tree.push(terminal_node);
         current_idx
     }
 
-    fn create_nonterminal_node(
+    pub fn create_nonterminal_node(
         &mut self,
         current_depth: usize,
         max_depth: usize,
@@ -346,6 +371,7 @@ impl ParseTree {
             return self.create_terminal_node(
                 required_type,
                 variable_definitions,
+                current_depth,
                 rng,
                 current_idx,
                 parent_idx,
@@ -368,6 +394,7 @@ impl ParseTree {
             return self.create_terminal_node(
                 required_type,
                 variable_definitions,
+                current_depth,
                 rng,
                 current_idx,
                 parent_idx,
@@ -388,6 +415,7 @@ impl ParseTree {
                 operation,
                 required_type,
             ),
+            depth: current_depth,
             value: placeholder_value,
             variable_id: None,
             left_index: None,  // Will be set after creating children
@@ -485,9 +513,11 @@ pub struct TreeOrchestrator {
     dataset: Dataset,                          // Training data with inputs and expected outputs
     possibilities_table: PossibilityTable,
     required_output_type: TypeInfo,
+    max_trees: usize,
     max_depth: usize,
     grow_method: GenerationMethod,
     pub trees: Vec<ParseTree>,
+    // fast lookup for tree scores.
     tree_scores: Vec<f64>, // Changed to f64 for fitness scores
 }
 
@@ -496,6 +526,7 @@ impl TreeOrchestrator {
         nt_grammar: NonTerminalGrammar,
         variable_definitions: VariableDefinitions,
         dataset: Dataset,
+        max_trees: usize,
         max_depth: usize,
         required_output_type: TypeInfo,
     ) -> Self {
@@ -505,26 +536,27 @@ impl TreeOrchestrator {
             dataset,
             required_output_type,
             possibilities_table: PossibilityTable::empty(max_depth),
+            max_trees: max_trees,
             max_depth: max_depth,
             grow_method: GenerationMethod::Full, // this is currently the only option supported.
-            trees: Vec::new(),
-            tree_scores: Vec::new(),
+            trees: Vec::with_capacity(max_trees),
+            tree_scores: vec!(0.0f64; max_trees),
         }
     }
 
-    pub fn generate_empty_trees(&mut self, generation_size: usize) {
-        for i in 0..generation_size {
+    pub fn generate_empty_trees(&mut self) {
+        for i in 0..self.max_trees {
             self.trees.push(ParseTree::empty(i));
         }
     }
 
-    pub fn generate_trees(&mut self, generation_size: usize) {
+    pub fn generate_trees(&mut self) {
         // Ensure possibilities table is constructed before generation
         if !self.possibilities_table.is_valid_for_generation() {
             self.construct_possibilities_table();
         }
 
-        for i in 0..generation_size {
+        for i in 0..self.max_trees {
             self.trees.push(ParseTree::generate_random(
                 i,
                 self.max_depth,
@@ -570,7 +602,7 @@ impl TreeOrchestrator {
     // now for the time being this is operating under the understanding that runtime variables is a hashmap in memory that gets updated EVERYTIME evaluate wants to get called.
     // I don't know if this should happen in evaluate_trees or elsewhere, but that can be figured out.
     // perhaps Dataset should have a method that allows it to decompose into runtime variables? that seems cleanish.
-    // also keeping in mind that we want this to be super parallel. t
+    // also keeping in mind that we want this to be super parallel eventually. t
     // these will own their values, I believe
     pub fn evaluate_trees<'a>(&mut self, data: &'a EvalInput) {
         for tree in &mut self.trees {
@@ -581,8 +613,8 @@ impl TreeOrchestrator {
     /// Evaluates the trees fitness values against the internally stored Dataset.
     /// Stores their fitness value in each ParseTree.
     pub fn evaluate_fitness(&mut self) {
-        for tree in self.trees.iter_mut() {
-            tree.evaluate_fitness(&self.dataset, &self.nt_grammar);
+        for (idx, tree) in self.trees.iter_mut().enumerate() {
+            self.tree_scores[idx] = tree.evaluate_fitness(&self.dataset, &self.nt_grammar);
         }
     }
 

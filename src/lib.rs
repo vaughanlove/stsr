@@ -7,3 +7,4 @@ pub mod shape;
 pub mod tree_builder;
 pub mod possibilities_tables;
 pub mod nonterminal;
+pub mod utils;

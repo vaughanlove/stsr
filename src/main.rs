@@ -1,8 +1,9 @@
+use stsr::node::{Node, NodeType};
 // use stsr::arena::{Arena, GenerationMethod};
 use stsr::nonterminal::NonTerminalGrammar;
 use stsr::types::{DataType, Dataset, EvalInput, GenerationMethod, Shape, TypeInfo, Variable, VariableDefinitions};
 use stsr::ops::Operation;
-use stsr::tree_builder::TreeOrchestrator;
+use stsr::tree_builder::{ParseTree, TreeOrchestrator};
 use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -11,8 +12,9 @@ fn main() {
     // test_arena_constrution();
     // test_compatible_inputs();
     // create_terminal_set();
-    test_create_nonterminal_registry();
+    // test_create_nonterminal_registry();
     test_random_tree_generation();
+    // test_perfect_tree_fitness();
 }
 
 
@@ -117,6 +119,16 @@ fn test_random_tree_generation() {
             Box::new(val_a * val_b)
         }
     );
+
+    // Add homogeneous float operations
+    let int_mult_rule = stsr::nonterminal::NonTerminalRule::new(
+        scalar_int, scalar_int, Operation::Multiply, scalar_int,
+        |a, b| {
+            let val_a = a.downcast_ref::<i32>().unwrap();
+            let val_b = b.downcast_ref::<i32>().unwrap();
+            Box::new(val_a * val_b)
+        }
+    );
     
     // Add mixed-type operations: Float + Integer -> Integer (with conversion)
     let float_int_to_int = stsr::nonterminal::NonTerminalRule::new(
@@ -146,44 +158,43 @@ fn test_random_tree_generation() {
             Box::new(val_a * (*val_b as f64)) 
         }
     );
-
-    // Add type conversion: Integer -> Float
-    let int_to_float_rule = stsr::nonterminal::NonTerminalRule::new(
-        scalar_int, scalar_int, Operation::Add, scalar_float, // Using add as a "convert" operation
-        |a, b| {
-            let val_a = a.downcast_ref::<i32>().unwrap();
-            let val_b = a.downcast_ref::<i32>().unwrap(); // Ignore second input for conversion
-            Box::new(*val_a as f64) // Convert to float
-        }
-    );
     
     nt_grammar.add_rule(int_add_rule);
-    nt_grammar.add_rule(float_mult_rule);
-    nt_grammar.add_rule(float_int_to_int);
-    nt_grammar.add_rule(int_float_to_float);
-    nt_grammar.add_rule(int_float_to_float_reversed_inputs);
-    nt_grammar.add_rule(int_to_float_rule);
+    nt_grammar.add_rule(int_mult_rule);
+    // nt_grammar.add_rule(float_mult_rule);
+    // nt_grammar.add_rule(float_int_to_int);
+    // nt_grammar.add_rule(int_float_to_float);
+    // nt_grammar.add_rule(int_float_to_float_reversed_inputs);
     
     // Create variable definitions with mixed types
     let variables = vec![
         Variable { name: "x".to_string(), _type: scalar_int },
-        Variable { name: "y".to_string(), _type: scalar_int },
-        Variable { name: "z".to_string(), _type: scalar_float },
-        Variable { name: "w".to_string(), _type: scalar_float },
+        // Variable { name: "z".to_string(), _type: scalar_float },
     ];
+    
     let variable_definitions = VariableDefinitions::new(variables);
     
-    // Create a simple dataset with mixed types
-    let mut input_values = HashMap::new();
-    input_values.insert("x".to_string(), Box::new(5i32) as Box<dyn Any>);
-    input_values.insert("y".to_string(), Box::new(3i32) as Box<dyn Any>);
-    input_values.insert("z".to_string(), Box::new(2.5f64) as Box<dyn Any>);
-    input_values.insert("w".to_string(), Box::new(1.5f64) as Box<dyn Any>);
-    
-    let data_row = stsr::types::DataRow::from_map(&variable_definitions, input_values).unwrap();
+    // Create a simple dataset with mixed types.
+    // For anyone looking, this is not the final API design but just a temporary solution.
+    let mut input_values_1 = HashMap::new();
+    let mut input_values_2 = HashMap::new();
+    let mut input_values_3 = HashMap::new();
+    let mut input_values_4 = HashMap::new();
+
+    input_values_1.insert("x".to_string(), Box::new(1i32) as Box<dyn Any>);
+    input_values_2.insert("x".to_string(), Box::new(2i32) as Box<dyn Any>);
+    input_values_3.insert("x".to_string(), Box::new(3i32) as Box<dyn Any>);
+    input_values_4.insert("x".to_string(), Box::new(4i32) as Box<dyn Any>);
+
+
+    let data_row_1 = stsr::types::DataRow::from_map(&variable_definitions, input_values_1).unwrap();
+    let data_row_2 = stsr::types::DataRow::from_map(&variable_definitions, input_values_2).unwrap();
+    let data_row_3 = stsr::types::DataRow::from_map(&variable_definitions, input_values_3).unwrap();
+    let data_row_4 = stsr::types::DataRow::from_map(&variable_definitions, input_values_4).unwrap();
+
     let dataset = Dataset::new(
-        vec![data_row],
-        vec![Box::new(8.0f64) as Box<dyn Any>] // Float output target
+        vec![data_row_1, data_row_2,data_row_3,data_row_4],
+        vec![Box::new(1i32) as Box<dyn Any>,Box::new(4i32) as Box<dyn Any>,Box::new(9i32) as Box<dyn Any>, Box::new(16i32) as Box<dyn Any>] // Float output target
     ).unwrap();
     
     // Create tree orchestrator targeting Float output to test mixed-type propagation
@@ -191,12 +202,13 @@ fn test_random_tree_generation() {
         nt_grammar,
         variable_definitions,
         dataset,
-        4, // max_depth (increased to allow more complex trees)
-        scalar_float, // required_output_type - now targeting Float to test mixed types
+        100,
+        2, // max_depth (increased to allow more complex trees)
+        scalar_int, // required_output_type - now targeting Float to test mixed types
     );
     
     // Generate a single random tree
-    orchestrator.generate_trees(5);
+    orchestrator.generate_trees();
     
     println!("Generated tree orchestrator with {} trees", orchestrator.trees.len());
     
@@ -228,6 +240,107 @@ fn test_random_tree_generation() {
     let data = EvalInput::Data(&rdata, &tval);
 
     orchestrator.evaluate_fitness();
+}
+
+
+fn test_perfect_tree_fitness() {
+
+    let scalar_int = TypeInfo { 
+        shape: Shape::Scalar, 
+        data_type: DataType::Integer 
+    };
+
+    let mut tree = ParseTree::empty(1);
+
+    let variables = vec![
+        Variable { name: "x".to_string(), _type: scalar_int },
+        // Variable { name: "z".to_string(), _type: scalar_float },
+    ];
+    
+    let variable_definitions = VariableDefinitions::new(variables);
+
+    let mut nt_grammar = NonTerminalGrammar::new();
+
+
+    // Add homogeneous float operations
+    let float_mult_rule = stsr::nonterminal::NonTerminalRule::new(
+        scalar_int, scalar_int, Operation::Multiply, scalar_int,
+        |a, b| {
+            let val_a = a.downcast_ref::<i32>().unwrap();
+            let val_b = b.downcast_ref::<i32>().unwrap();
+            Box::new(val_a * val_b)
+        }
+    );
+
+    nt_grammar.add_rule(float_mult_rule);
+
+    let types = nt_grammar.get_all_possible_input_types_with_operations(scalar_int);
+    
+     let nonterminal_node = Node {
+            idx: 0,
+            _type: NodeType::NonTerminal(
+               scalar_int,
+                scalar_int,
+                types[0].2,
+                scalar_int,
+            ),
+            depth: 0,
+            value: Box::new(0),
+            variable_id: None,
+            left_index: Some(1),  // Will be set after creating children
+            right_index: Some(2), // Will be set after creating children
+            parent_index: 0,
+        };
+
+    let terminal_node_one = Node {
+        idx: 1,
+        _type: NodeType::Terminal(scalar_int),
+        depth: 1,
+        value: Box::new(0),
+        variable_id: Some("x".to_string()),
+        right_index: None,
+        left_index: None,
+        parent_index: 0,
+    };
+    let terminal_node_two = Node {
+        idx: 2,
+        _type: NodeType::Terminal(scalar_int),
+        depth: 1,
+        value: Box::new(0),
+        variable_id: Some("x".to_string()),
+        right_index: None,
+        left_index: None,
+        parent_index: 0,
+    };
+
+    tree.tree.push(nonterminal_node);
+    tree.tree.push(terminal_node_one);
+    tree.tree.push(terminal_node_two);
+
+    print_tree_structure(&tree);
+
+    let mut input_values_1 = HashMap::new();
+    let mut input_values_2 = HashMap::new();
+    let mut input_values_3 = HashMap::new();
+    let mut input_values_4 = HashMap::new();
+
+    input_values_1.insert("x".to_string(), Box::new(1i32) as Box<dyn Any>);
+    input_values_2.insert("x".to_string(), Box::new(2i32) as Box<dyn Any>);
+    input_values_3.insert("x".to_string(), Box::new(3i32) as Box<dyn Any>);
+    input_values_4.insert("x".to_string(), Box::new(4i32) as Box<dyn Any>);
+
+
+    let data_row_1 = stsr::types::DataRow::from_map(&variable_definitions, input_values_1).unwrap();
+    let data_row_2 = stsr::types::DataRow::from_map(&variable_definitions, input_values_2).unwrap();
+    let data_row_3 = stsr::types::DataRow::from_map(&variable_definitions, input_values_3).unwrap();
+    let data_row_4 = stsr::types::DataRow::from_map(&variable_definitions, input_values_4).unwrap();
+
+    let dataset = Dataset::new(
+        vec![data_row_1, data_row_2,data_row_3,data_row_4],
+        vec![Box::new(1i32) as Box<dyn Any>,Box::new(4i32) as Box<dyn Any>,Box::new(9i32) as Box<dyn Any>, Box::new(16i32) as Box<dyn Any>] // Float output target
+    ).unwrap();
+
+    tree.evaluate_fitness(&dataset, &nt_grammar);
 }
 
 fn print_tree_structure(tree: &stsr::tree_builder::ParseTree) {

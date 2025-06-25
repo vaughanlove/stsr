@@ -112,6 +112,7 @@ pub struct Node {
     pub left_index: Option<usize>,
     pub right_index: Option<usize>,
     pub parent_index: usize,
+    pub depth: usize,
 }
 
 // pub trait MatchesTerminal {
@@ -243,11 +244,16 @@ impl Node {
         self.left_index.is_none() && self.right_index.is_none()
     }
 
+    pub fn get_depth(&self) -> usize {
+        self.depth
+    }
+
     pub fn new_non_terminal<T: 'static>(
         idx: usize,
         variable_id: Option<String>,
         operation: Operation,
         value: T,
+        depth: usize,
         left_type: TypeInfo,
         right_type: TypeInfo,
         output_type: TypeInfo,
@@ -263,6 +269,7 @@ impl Node {
             left_index: Some(left_index),
             right_index: Some(right_index),
             parent_index,
+            depth
         }
     }
 }

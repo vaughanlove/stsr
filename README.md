@@ -29,22 +29,23 @@ Vec<Box<dyn Node>> - which can be interpreted as Vector of Boxes of any type tha
 
 future: use macros to populate the NonTerminalGrammar to make the user API experience better 
 
- What's left (roughly estimated):
+https://rust-unofficial.github.io/patterns/additional_resources/design-principles.html
 
-  Day 1-2: Tree Evaluation (~4-6 hours)
-  - tree walker that substitutes variables and calls operations 
+Investigate https://rust-unofficial.github.io/patterns/functional/optics.html to possibly redefine a better type system
 
-  Day 3-4: Fitness & Evolution (~6-8 hours)
-  - Basic fitness functions (MSE, etc.)
+What's left (roughly estimated):
+
+Fitness & Evolution (~6-8 hours)
+  - Basic fitness functions (MSE, etc.) - done
   - Simple mutation (subtree replacement)
   - Basic crossover (subtree swapping)
   - Population management
 
-  Day 5-6: Polish & Testing (~4-6 hours)
+Polish & Testing (~4-6 hours)
   - Integration testing
   - Bug fixes
   - Maybe add a few unary operations (sin/cos)
 
-  Day 7: Documentation/Examples (~2-4 hours)
+Documentation/Examples (~2-4 hours)
   - Clean up the API
   - Add some example problems
